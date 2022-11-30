@@ -2,14 +2,29 @@ import json
 import numpy as np
 import pandas as pd
 import pickle
+import os
 
 PATH = "data/"
-MODEL_PATH = "segmentation/rid_model.pkl"
+TOTAL_MATRIX_PATH = "segmentation/total_matrix.txt"
 
-def find_json_data(day: int, month: int, year: int):
-    day = str(day).zfill(2)
-    month = str(month).zfill(2)
-    year = str(year)
+def get_all_json_data():
+    all_data = []
+    for filename in os.listdir(PATH):
+        filepath = PATH + filename
+        with open(filepath) as f: 
+            data = json.load(f)
+        data = np.array(data)
+        data = data[0, :, :]
+        all_data.append(data)
+    return all_data
+
+def process_matrices(matrices):
+    matrices = tuple(matrices)
+    total_matrix = np.dstack(matrices)
+    total_matrix = np.mean(total_matrix, 2)
+    return total_matrix
+
+def find_json_data(day: str, month: str, year: str):
     filename = year + month + day + ".json"
     filepath = PATH + filename
     with open(filepath) as f: 
@@ -26,25 +41,18 @@ def convert_to_json(data):
     data = data.to_dict()
     return data
 
-def get_model():
-    with open(MODEL_PATH, "rb") as f:
-        model = pickle.load(f)
-    return model
+def cluster_matrix(matrix):
+    non_vegetation = matrix<=0
+    weak = (matrix>0) & (matrix<=0.05)
+    moderate = (matrix>0.05) & (matrix<=0.25)
+    good = matrix>0.25
+    matrix[non_vegetation] = 0
+    matrix[weak] = 1
+    matrix[moderate] = 2
+    matrix[good] = 3
+    return matrix
 
-def map_labels(data):
-    indices_1 = data==0
-    indices_2 = data==1
-    indices_3 = data==2
-    data[indices_1] = 1
-    data[indices_2] = 0
-    data[indices_3] = 2
-    return data
-
-def cluster_data(model, data):
-    height = data.shape[0]
-    width = data.shape[1]
-    flat_data = data.reshape((height*width, 1))
-    predicted_data = model.predict(flat_data)
-    predicted_data = map_labels(predicted_data)
-    predicted_data = predicted_data.reshape(data.shape)
-    return predicted_data
+def load_total_matrix():
+    with open(TOTAL_MATRIX_PATH, "rb") as f:
+        total_matrix = pickle.load(f)
+    return total_matrix
